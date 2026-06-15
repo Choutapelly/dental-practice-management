@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dental Practice AI Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body class="bg-slate-50 font-sans text-slate-800">
+
+  <div class="flex h-screen overflow-hidden">
+    <div class="w-64 bg-slate-900 text-white flex flex-col justify-between p-4">
+      <div>
+        <div class="flex items-center space-x-2 px-2 py-3 border-b border-slate-700 mb-6">
+          <span class="text-2xl">🦷</span>
+          <span class="font-bold text-lg tracking-wide uppercase">DentalAI Core</span>
+        </div>
+        <nav class="space-y-2">
+          <button id="role-dentist-btn" onclick="switchRole('DENTIST')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-lg bg-blue-600 font-medium text-white text-left">
+            <span>🩺</span>
+            <span>Clinical Workspace</span>
+          </button>
+          <button id="role-patient-btn" onclick="switchRole('PATIENT')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white font-medium text-left">
+            <span>👤</span>
+            <span>Patient Portal</span>
+          </button>
+        </nav>
+      </div>
+      <div class="p-2 border-t border-slate-800 text-xs text-slate-500 text-center">
+        Backend Status: <span id="status-badge" class="text-emerald-400 font-semibold">Checking...</span>
+      </div>
+    </div>
+
+    <div class="flex-1 flex flex-col h-full">
+      <header class="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-8 shadow-sm">
+        <div class="flex items-center space-x-3">
+          <span id="workspace-badge" class="px-2.5 py-1 rounded-md text-xs font-bold uppercase bg-blue-100 text-blue-800">Dentist Mode</span>
+          <h1 id="workspace-title" class="text-xl font-bold text-slate-800">Clinical Assistant Pipeline</h1>
+        </div>
+      </header>
+
+      <main class="flex-1 overflow-y-auto p-8 space-y-4" id="chat-window">
+        <section id="registration" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6">
+          <h2 class="text-xl font-bold mb-4">Register New Patient</h2>
+          <form id="patientForm" class="flex gap-4">
+            <input type="text" id="fullName" placeholder="Full Name" class="border p-2 rounded flex-1" required>
+            <input type="date" id="dob" class="border p-2 rounded" required>
+            <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded">Register</button>
+          </form>
+        </section>
+
+        <section id="dashboard" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6">
+          <h2 class="text-xl font-bold mb-4">Patient Records</h2>
+          <div id="patientList"></div>
+          <button onclick="loadPatients()" class="mt-4 text-blue-600 underline">Refresh List</button>
+        </section>
+      </main>
+
+      <footer class="p-6 bg-white border-t border-slate-200 shadow-lg">
+        <form id="chat-form" onsubmit="handleSubmit(event)" class="max-w-4xl mx-auto flex space-x-4">
+          <input type="text" id="user-prompt-input" placeholder="Type your dental query here..." class="flex-1 border border-slate-300 rounded-xl px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 shadow-inner" required>
+          <button type="submit" id="send-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-3.5 rounded-xl transition duration-150 shadow-md">Send</button>
+        </form>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    let currentRole = 'DENTIST';
+    const API_BASE = 'http://localhost:3000/api';
+
+    function switchRole(role) {
+      currentRole = role;
+      const dentistBtn = document.getElementById('role-dentist-btn');
+      const patientBtn = document.getElementById('role-patient-btn');
+      const badge = document.getElementById('workspace-badge');
+      const title = document.getElementById('workspace-title');
+      
+      if (role === 'DENTIST') {
+        dentistBtn.className = "w-full flex items-center space-x-3 px-4 py-3 rounded-lg bg-blue-600 font-medium text-white text-left";
+        patientBtn.className = "w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white font-medium text-left";
+        badge.textContent = "Dentist Mode";
+        title.textContent = "Clinical Assistant Pipeline";
+      } else {
+        patientBtn.className = "w-full flex items-center space-x-3 px-4 py-3 rounded-lg bg-emerald-600 font-medium text-white text-left";
+        dentistBtn.className = "w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white font-medium text-left";
+        badge.textContent = "Patient Mode";
+        title.textContent = "Patient Care Portal";
+      }
+    }
+
+    function appendMessage(sender, text, icon) {
+        const chatWindow = document.getElementById('chat-window');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = "flex items-start space-x-3 max-w-3xl my-4";
+        messageDiv.innerHTML = `
+            <div class="bg-slate-200 p-2.5 rounded-lg text-lg shadow-sm">${icon}</div>
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <p class="text-sm leading-relaxed">${marked.parse(text)}</p>
+            </div>
+        `;
+        chatWindow.appendChild(messageDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    async function handleSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('user-prompt-input');
+      const promptText = input.value.trim();
+      if (!promptText) return;
+      
+      appendMessage('user', promptText, '👤');
+      input.value = '';
+      
+      try {
+        const response = await fetch(`${API_BASE}/assistant/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: currentRole, userPrompt: promptText })
+        });
+        const data = await response.json();
+        appendMessage('bot', data.reply, currentRole === 'DENTIST' ? '🩺' : '🤖');
+      } catch (err) { appendMessage('bot', 'Error: Unable to connect to server.', '⚠️'); }
+    }
+
+    async function checkHealth() {
+      try {
+        const res = await fetch(`${API_BASE}/health`);
+        if (res.ok) document.getElementById('status-badge').textContent = 'ONLINE';
+      } catch (err) { document.getElementById('status-badge').textContent = 'OFFLINE'; }
+    }
+
+    async function loadPatients() {
+      try {
+        const response = await fetch('/api/patients');
+        const data = await response.json();
+        const container = document.getElementById('patientList');
+        container.innerHTML = ''; 
+        data.patients.forEach(patient => {
+          container.innerHTML += `<div class="p-4 border-b"><p><strong>Name:</strong> ${patient.full_name}</p><p><strong>DOB:</strong> ${patient.dob}</p></div>`;
+        });
+      } catch (error) { console.error("Error loading patients:", error); }
+    }
+
+    document.getElementById('patientForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await fetch('/api/patients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_name: document.getElementById('fullName').value, dob: document.getElementById('dob').value })
+      });
+      loadPatients();
+      e.target.reset();
+    });
+
+    loadPatients();
+    checkHealth();
+  </script>
+</body>
+</html>
